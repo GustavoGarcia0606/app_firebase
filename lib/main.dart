@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized(); //garante que tudo esteja pronto ao carregar
+  WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
@@ -15,8 +15,25 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Lista',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      title: 'Lista de Tarefas',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.indigo,
+        scaffoldBackgroundColor: const Color(0xFFF6F6F6),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.indigo,
+          foregroundColor: Colors.white,
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      
+      ),
       home: const ListPage(),
     );
   }
@@ -31,27 +48,26 @@ class ListPage extends StatefulWidget {
 
 class _ListPageState extends State<ListPage> {
   final TextEditingController _listControl = TextEditingController();
-  final CollectionReference _list = FirebaseFirestore.instance.collection(
-    'tarefas',
-  );
+  final CollectionReference _list = FirebaseFirestore.instance.collection('tarefas');
 
   Future<void> _addList() async {
-  if (_listControl.text.isNotEmpty) {
-    try {
-      await _list.add({
-        "titulo": _listControl.text,
-        "times": Timestamp.now(),
-        "status": "pendente", // novo campo
-      });
-      _listControl.clear();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao adicionar: $e')),
-      );
+    if (_listControl.text.isNotEmpty) {
+      try {
+        await _list.add({
+          "titulo": _listControl.text,
+          "times": Timestamp.now(),
+          "status": "pendente",
+        });
+        _listControl.clear();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao adicionar: $e')),
+        );
+      }
     }
   }
-}
-Future<void> _deleteTask(String id) async {
+
+  Future<void> _deleteTask(String id) async {
     try {
       await _list.doc(id).delete();
     } catch (e) {
@@ -74,24 +90,36 @@ Future<void> _deleteTask(String id) async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Tarefas')),
+      appBar: AppBar(title: const Text('Minhas Tarefas')),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.all(16.0),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _listControl,
-                    decoration: const InputDecoration(labelText: 'Nova Tarefa'),
+                    decoration: const InputDecoration(
+                      labelText: 'Digite uma nova tarefa',
+                      prefixIcon: Icon(Icons.edit),
+                    ),
                   ),
                 ),
-                IconButton(icon: const Icon(Icons.add), onPressed: _addList),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: _addList,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Adicionar'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
               ],
             ),
           ),
-           Expanded(
+          Expanded(
             child: StreamBuilder(
               stream: _list.orderBy('times', descending: true).snapshots(),
               builder: (context, AsyncSnapshot<QuerySnapshot> streamSnapshot) {
@@ -103,30 +131,45 @@ Future<void> _deleteTask(String id) async {
                       final String titulo = documentSnapshot['titulo'];
                       final String status = documentSnapshot['status'] ?? 'indefinido';
 
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        child: ListTile(
-                          title: Text(titulo),
-                          subtitle: Text('Status: $status'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () => _deleteTask(documentSnapshot.id),
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Card(
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            title: Text(
+                              titulo,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                            ),
+                            subtitle: Text(
+                              'Status: $status',
+                              style: TextStyle(
+                                color: status == 'concluída'
+                                    ? Colors.green
+                                    : status == 'em desenvolvimento'
+                                        ? Colors.orange
+                                        : Colors.red,
                               ),
-                              PopupMenuButton<String>(
-                                onSelected: (String newStatus) {
-                                  _updateStatus(documentSnapshot.id, newStatus);
-                                },
-                                itemBuilder: (BuildContext context) => const [
-                                  PopupMenuItem(value: 'pendente', child: Text('Pendente')),
-                                  PopupMenuItem(value: 'em desenvolvimento', child: Text('Em desenvolvimento')),
-                                  PopupMenuItem(value: 'concluída', child: Text('Concluída')),
-                                ],
-                                icon: const Icon(Icons.more_vert),
-                              ),
-                            ],
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                  onPressed: () => _deleteTask(documentSnapshot.id),
+                                ),
+                                PopupMenuButton<String>(
+                                  onSelected: (String newStatus) {
+                                    _updateStatus(documentSnapshot.id, newStatus);
+                                  },
+                                  itemBuilder: (BuildContext context) => const [
+                                    PopupMenuItem(value: 'pendente', child: Text('Pendente')),
+                                    PopupMenuItem(value: 'em desenvolvimento', child: Text('Em desenvolvimento')),
+                                    PopupMenuItem(value: 'concluída', child: Text('Concluída')),
+                                  ],
+                                  icon: const Icon(Icons.more_vert),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       );
